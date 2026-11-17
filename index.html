@@ -642,6 +642,75 @@ main { min-height: 60vh; }
 
 .notes-empty { color: var(--muted); margin-top: 18px; }
 
+/* Folder view (works like a PC folder) */
+.fx {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fff;
+}
+.fx-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.fx-up {
+  font: inherit;
+  font-weight: 600;
+  border: 1px solid #b9bdb8;
+  background: #fff;
+  border-radius: 3px;
+  padding: 3px 10px 1px;
+  cursor: pointer;
+}
+.fx-up:disabled { opacity: 0.4; cursor: default; }
+.fx-path { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; font-size: 0.95rem; }
+.fx-path button {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  color: var(--blue);
+  cursor: pointer;
+}
+.fx-path button:hover { text-decoration: underline; }
+.fx-path .sep { color: var(--muted); }
+.fx-path .here { font-weight: 700; padding: 2px 4px; }
+.fx-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 6px;
+  padding: 14px 10px;
+  min-height: 140px;
+  align-content: start;
+}
+.fx-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.25;
+  color: var(--ink, #222);
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  word-break: break-word;
+}
+.fx-item:hover, .fx-item:focus-visible { background: #fdf6e3; border-color: var(--gold); text-decoration: none; }
+.fx-item svg { width: 54px; height: 54px; flex: none; }
+.fx-item small { color: var(--muted); font-size: 0.78rem; }
+.fx-empty { grid-column: 1 / -1; color: var(--muted); margin: 0; }
+
 /* ---------------- Gallery ---------------- */
 
 .gallery {
@@ -852,13 +921,6 @@ main { min-height: 60vh; }
     </nav>
   </header>
 
-  <!-- Notice strip — edit or delete this block -->
-  <div class="notice-strip">
-    <div class="wrap">
-      <strong>Now open:</strong> registration for the Annual Medical Research Symposium and the MSU blood donation drive.
-      <a href="#notices">See notices</a>
-    </div>
-  </div>
 
   <main>
 
@@ -891,33 +953,6 @@ main { min-height: 60vh; }
         </article>
 
         <aside class="sidebar">
-          <div class="panel">
-            <h3>Latest notices</h3>
-            <ul class="notice-list">
-              <li>
-                <time datetime="2026-10-20">20 Oct 2026</time>
-                <a href="#notices">2nd MBBS examination timetable published</a>
-              </li>
-              <li>
-                <time datetime="2026-10-14">14 Oct 2026</time>
-                <a href="#notices">Mahapola and bursary instalment released</a>
-              </li>
-              <li>
-                <time datetime="2026-10-05">05 Oct 2026</time>
-                <a href="#notices">Call for abstracts: Annual Research Symposium</a>
-              </li>
-            </ul>
-          </div>
-
-          <div class="panel">
-            <h3>Coming up</h3>
-            <ul class="event-list">
-              <li><span class="ev-date">Nov</span> Final MBBS clinical examination briefing</li>
-              <li><span class="ev-date">Dec</span> MSU inter-batch cricket tournament</li>
-              <li><span class="ev-date">Jan</span> Community medicine field health camp</li>
-            </ul>
-          </div>
-
           <div class="panel">
             <h3>Useful links</h3>
             <ul class="link-list">
@@ -1167,8 +1202,8 @@ main { min-height: 60vh; }
               </div>
               <button type="button" class="btn-plain" id="logoutBtn">Log out</button>
             </div>
-            <label class="field-label" for="notesSearch">Search notes</label>
-            <input class="field notes-search" id="notesSearch" type="search" placeholder="Subject or title">
+            <label class="field-label" for="notesSearch">Search files</label>
+            <input class="field notes-search" id="notesSearch" type="search" placeholder="Search all files">
             <div id="notesList"></div>
           </div>
         </div>
@@ -1447,59 +1482,169 @@ if (typeof module !== 'undefined') module.exports = NotesLib;
     return /^https?:\/\//i.test(url || '') ? url : null;
   }
 
+  // ----- Folder view -----
+  // Each note's Year and Subject become folders, like on a PC:
+  //   Union notes > 1st MBBS > Anatomy > Upper limb.pdf
+  // Use "/" in the Subject for folders inside folders, e.g. "Anatomy/Upper limb".
+  let currentPath = [];
+
+  const FOLDER_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M4 12a3 3 0 0 1 3-3h11l4 4h19a3 3 0 0 1 3 3v3H4z" fill="#d9a521"/><path d="M4 17h40v21a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z" fill="#f2c14e"/></svg>';
+  const PDF_ICON = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M11 4h18l10 10v28a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="#fff" stroke="#9aa09a" stroke-width="1.5"/><path d="M29 4v8a2 2 0 0 0 2 2h8" fill="#e8e8e8" stroke="#9aa09a" stroke-width="1.5"/><rect x="5" y="25" width="26" height="12" rx="2" fill="#c62828"/><text x="18" y="34" text-anchor="middle" font-family="Arial,sans-serif" font-size="8" font-weight="700" fill="#fff">PDF</text></svg>';
+
+  function notePath(n) {
+    const parts = [n.year || 'Other'];
+    String(n.subject || '').split('/').map(x => x.trim()).filter(Boolean).forEach(x => parts.push(x));
+    return parts;
+  }
+
+  function startsWith(path, prefix) {
+    return prefix.every((p, i) => path[i] === p);
+  }
+
+  function fileItem(n, showWhere) {
+    const url = safeLink(n.link);
+    const el = document.createElement(url ? 'a' : 'div');
+    el.className = 'fx-item';
+    if (url) { el.href = url; el.target = '_blank'; el.rel = 'noopener'; }
+    el.title = n.title;
+    el.innerHTML = PDF_ICON;
+    const name = document.createElement('span');
+    name.textContent = n.title;
+    el.appendChild(name);
+    if (showWhere) {
+      const where = document.createElement('small');
+      where.textContent = notePath(n).join(' › ');
+      el.appendChild(where);
+    }
+    return el;
+  }
+
+  function folderItem(name, count) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'fx-item';
+    b.title = 'Open ' + name;
+    b.innerHTML = FOLDER_ICON;
+    const label = document.createElement('span');
+    label.textContent = name;
+    const c = document.createElement('small');
+    c.textContent = count + (count === 1 ? ' file' : ' files');
+    b.append(label, c);
+    b.addEventListener('click', () => { currentPath = currentPath.concat(name); renderNotes(); });
+    return b;
+  }
+
   function renderNotes() {
     const q = notesSearch.value.trim().toLowerCase();
-    const shown = currentNotes.filter(n =>
-      !q || [n.year, n.subject, n.title].join(' ').toLowerCase().includes(q));
     notesList.innerHTML = '';
 
-    if (!shown.length) {
+    if (!currentNotes.length) {
       const p = document.createElement('p');
       p.className = 'notes-empty';
-      p.textContent = currentNotes.length ? 'No notes match your search.' : 'No notes have been added yet.';
+      p.textContent = 'No notes have been added yet.';
       notesList.appendChild(p);
       return;
     }
 
-    const years = [];
-    shown.forEach(n => { if (!years.includes(n.year)) years.push(n.year); });
+    const box = document.createElement('div');
+    box.className = 'fx';
+    const bar = document.createElement('div');
+    bar.className = 'fx-bar';
+    const grid = document.createElement('div');
+    grid.className = 'fx-grid';
 
-    years.forEach(year => {
-      const h = document.createElement('h4');
-      h.className = 'notes-year';
-      h.textContent = year || 'Other';
-      notesList.appendChild(h);
-
-      const table = document.createElement('table');
-      table.className = 'notes-table';
-      const body = document.createElement('tbody');
-      shown.filter(n => n.year === year).forEach(n => {
-        const tr = document.createElement('tr');
-        const subj = document.createElement('td');
-        subj.className = 'subj';
-        subj.textContent = n.subject || '';
-        const title = document.createElement('td');
-        const url = safeLink(n.link);
-        if (url) {
-          const a = document.createElement('a');
-          a.href = url;
-          a.target = '_blank';
-          a.rel = 'noopener';
-          a.textContent = n.title;
-          title.appendChild(a);
-        } else {
-          title.textContent = n.title;
-        }
-        tr.append(subj, title);
-        body.appendChild(tr);
-      });
-      table.appendChild(body);
-      notesList.appendChild(table);
+    // Toolbar: Up button and clickable path
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'fx-up';
+    up.textContent = '↑ Up';
+    up.disabled = q ? false : currentPath.length === 0;
+    up.addEventListener('click', () => {
+      if (q) notesSearch.value = '';
+      else currentPath = currentPath.slice(0, -1);
+      renderNotes();
     });
+    const path = document.createElement('nav');
+    path.className = 'fx-path';
+    path.setAttribute('aria-label', 'Folder path');
+    const crumbs = ['Union notes'].concat(currentPath);
+    crumbs.forEach((name, i) => {
+      if (i) {
+        const sep = document.createElement('span');
+        sep.className = 'sep';
+        sep.textContent = '›';
+        path.appendChild(sep);
+      }
+      if (i === crumbs.length - 1 && !q) {
+        const here = document.createElement('span');
+        here.className = 'here';
+        here.textContent = name;
+        path.appendChild(here);
+      } else {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = name;
+        b.addEventListener('click', () => { notesSearch.value = ''; currentPath = currentPath.slice(0, i); renderNotes(); });
+        path.appendChild(b);
+      }
+    });
+    if (q) {
+      const sep = document.createElement('span');
+      sep.className = 'sep';
+      sep.textContent = '›';
+      const here = document.createElement('span');
+      here.className = 'here';
+      here.textContent = 'Search results';
+      path.append(sep, here);
+    }
+    bar.append(up, path);
+
+    if (q) {
+      // Search: every matching file, wherever it is
+      const hits = currentNotes.filter(n =>
+        [n.year, n.subject, n.title].join(' ').toLowerCase().includes(q));
+      hits.forEach(n => grid.appendChild(fileItem(n, true)));
+      if (!hits.length) {
+        const p = document.createElement('p');
+        p.className = 'fx-empty';
+        p.textContent = 'No files match your search.';
+        grid.appendChild(p);
+      }
+    } else {
+      // If the folder no longer exists (list changed), go back to the top
+      if (!currentNotes.some(n => startsWith(notePath(n), currentPath))) currentPath = [];
+
+      const folders = [];
+      const counts = {};
+      const files = [];
+      currentNotes.forEach(n => {
+        const p = notePath(n);
+        if (!startsWith(p, currentPath)) return;
+        if (p.length > currentPath.length) {
+          const name = p[currentPath.length];
+          if (!(name in counts)) { folders.push(name); counts[name] = 0; }
+          counts[name]++;
+        } else {
+          files.push(n);
+        }
+      });
+      folders.forEach(name => grid.appendChild(folderItem(name, counts[name])));
+      files.forEach(n => grid.appendChild(fileItem(n, false)));
+      if (!folders.length && !files.length) {
+        const p = document.createElement('p');
+        p.className = 'fx-empty';
+        p.textContent = 'This folder is empty.';
+        grid.appendChild(p);
+      }
+    }
+
+    box.append(bar, grid);
+    notesList.appendChild(box);
   }
 
   function showNotes(id, payload) {
     currentNotes = payload.notes || [];
+    currentPath = [];
     document.getElementById('notesUser').textContent = id;
     loginBox.hidden = true;
     notesView.hidden = false;
